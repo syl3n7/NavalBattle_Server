@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Linq;
 
 namespace NavalBattle_Server;
 
@@ -12,27 +13,28 @@ class GameServer
 {
     static List<Player> players = new List<Player>();
     static TcpListener server;
+    static Dictionary<Player, bool> boardsReceived = new Dictionary<Player, bool>();
 
     static void Main()
     {
         server = new TcpListener(IPAddress.Any, 8888);
         server.Start();
         Console.WriteLine("Game Server is running...");
+        boardsReceived.Clear();
 
         while (players.Count < 2)
         {
             TcpClient client = server.AcceptTcpClient();
             Player p = new Player(client, players.Count + 1);
             players.Add(p);
-
-            CreateTable(p.Board);
+            boardsReceived[p] = false;
+            
             Console.WriteLine("New player connected!");
 
             Thread t = new Thread(() => ManagePlayer(p));
             t.Start();
         }
-        SendAll("START");
-        players[0].Send("YOUR_TURN");
+        // SendAll("START") and players[0].Send("YOUR_TURN") are now moved to after boards are received
     }
 
     static void ManagePlayer(Player p)
@@ -49,7 +51,7 @@ class GameServer
                 string[] parts = msg.Split(';');
                 string position = parts[1];
 
-                Player adversary = players.Find(p => p != p);
+                Player adversary = players.Find(player => player != p);
                 
                 string result = VerifyShot(adversary.Board, position);
                 
@@ -65,6 +67,20 @@ class GameServer
                 else
                 {
                     adversary.Send("YOUR_TURN");
+                }
+            }
+            else if (msg.StartsWith("BOARD;"))
+            {
+                string boardData = msg.Substring(6); // Remove "BOARD;"
+                File.WriteAllText(p.Board, boardData);
+                boardsReceived[p] = true;
+                Console.WriteLine($"{p.Username} submitted their board.");
+                p.Send("BOARD_RECEIVED");
+                
+                if (boardsReceived.Count == 2 && boardsReceived.Values.All(received => received))
+                {
+                    SendAll("START");
+                    players[0].Send("YOUR_TURN");
                 }
             }
         }
