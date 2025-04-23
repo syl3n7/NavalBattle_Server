@@ -4,3 +4,6 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 .ideia/
+Player1.txt
+.gitignore
+Player2.txt
